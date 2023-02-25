@@ -65,7 +65,9 @@ def softmax_loss(Z, y_one_hot):
         Average softmax loss over the sample. (ndl.Tensor[np.float32])
     """
     ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
+    a = ndl.ops.summation(Z * y_one_hot)
+    b = ndl.ops.summation(ndl.ops.log(ndl.ops.summation(ndl.ops.exp(Z), axes=(1, ))))
+    return (b - a) / Z.shape[0]
     ### END YOUR SOLUTION
 
 
@@ -94,7 +96,24 @@ def nn_epoch(X, y, W1, W2, lr = 0.1, batch=100):
     """
 
     ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
+    for i in range(X.shape[0] // batch + 1):
+        start, end = i * batch, min((i+1)*batch, X.shape[0])
+        m = end - start
+        if m == 0:
+            break
+        Xb, yb = X[start:end], y[start:end]
+        Xb = ndl.Tensor(Xb, requires_grad=False)
+        Z1 = Xb @ W1
+        A1 = ndl.ops.relu(Z1)
+        Z2 = A1 @ W2
+        y_one_hot = np.zeros(Z2.shape, dtype=np.float32)
+        y_one_hot[np.arange(Z2.shape[0]), yb] = 1
+        y_one_hot = ndl.Tensor(y_one_hot, requires_grad=False)
+        loss = softmax_loss(Z2, y_one_hot)     
+        loss.backward()
+        W1.data = W1.data - lr * ndl.Tensor(W1.grad.numpy().astype(np.float32)) 
+        W2.data = W2.data - lr * ndl.Tensor(W2.grad.numpy().astype(np.float32))
+    return W1, W2
     ### END YOUR SOLUTION
 
 
