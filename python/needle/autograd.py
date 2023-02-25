@@ -10,6 +10,7 @@ TENSOR_COUNTER = 0
 
 # NOTE: we will import numpy as the array_api
 # as the backend for our computations, this line will change in later homeworks
+# 注意，我们这里暂用numpy作为后端，后面这行代码可能会改
 import numpy as array_api
 NDArray = numpy.ndarray
 
@@ -18,6 +19,7 @@ class Device:
     """Indicates the device supporting an NDArray."""
 
 
+# 目前cpu device只是一个摆设，后序会真正用到cpu和cuda两个device
 class CPUDevice(Device):
     """Represents data that sits in CPU"""
 
@@ -42,6 +44,7 @@ def all_devices():
     return [cpu()]
 
 
+# TensorOp的父类，__call__、compute、gradient都在子类里实现
 class Op:
     """Operator definition."""
 
@@ -96,10 +99,15 @@ class Op:
             return (output,)
 
 
+# TensorOp是Op的子类，实现了父类里的__call__
 class TensorOp(Op):
     """ Op class specialized to output tensors, will be alternate subclasses for other structures """
 
     def __call__(self, *args):
+        # TensorOp()(tensor1, tensor 2)这种会调用TensorOp的__call__函数
+        # *args也就是输入的tensors
+        # 这里make_from_op是在用算子对args里的tensor做运算，返回运算结果
+        # 比如Tensor.make_from_op(EWiseAdd(), *(a, b))就是把a b加在一起返回
         return Tensor.make_from_op(self, args)
 
 
@@ -110,16 +118,20 @@ class TensorTupleOp(Op):
         return TensorTuple.make_from_op(self, args)
 
 
+# Value是Tensor的父类
 class Value:
     """A value in the computational graph."""
 
     # trace of computational graph
-    op: Optional[Op]
-    inputs: List["Value"]
+    # 用来追踪计算图
+    op: Optional[Op] # 算子
+    inputs: List["Value"] # 计算图中输入到这个结点的其他结点
+    # 比如v3 = v1 + v2，那么v3.op就是加法算子EWiseAdd，v3.inputs是[v1, v2]
+    
     # The following fields are cached fields for
     # dynamic computation
-    cached_data: NDArray
-    requires_grad: bool
+    cached_data: NDArray # 存储自身的数值
+    requires_grad: bool # 是否参与梯度计算
 
     def realize_cached_data(self):
         """Run compute to realize the cached data"""
@@ -127,18 +139,21 @@ class Value:
         if self.cached_data is not None:
             return self.cached_data
         # note: data implicitly calls realized cached data
+        # 用自己的op算子和inputs输入算出自己的数值
         self.cached_data = self.op.compute(
             *[x.realize_cached_data() for x in self.inputs]
         )
         return self.cached_data
 
     def is_leaf(self):
+        # 叶节点是没有op的
         return self.op is None
 
     def __del__(self):
         global TENSOR_COUNTER
         TENSOR_COUNTER -= 1
 
+    # 一个初始化函数，为op、inputs等赋初始值
     def _init(
         self,
         op: Optional[Op],
@@ -158,6 +173,7 @@ class Value:
         self.cached_data = cached_data
         self.requires_grad = requires_grad
 
+    # 和子类Tensor里的一样
     @classmethod
     def make_const(cls, data, *, requires_grad=False):
         value = cls.__new__(cls)
@@ -169,6 +185,7 @@ class Value:
         )
         return value
 
+    # 和子类Tensor里的一样
     @classmethod
     def make_from_op(cls, op: Op, inputs: List["Value"]):
         value = cls.__new__(cls)
@@ -235,6 +252,7 @@ class Tensor(Value):
                 cached_data = array.realize_cached_data()
             else:
                 # fall back, copy through numpy conversion
+                # 如果dtype或device不一致，则重新创建
                 cached_data = Tensor._array_from_numpy(
                     array.numpy(), device=device, dtype=dtype
                 )
@@ -242,6 +260,7 @@ class Tensor(Value):
             device = device if device else cpu()
             cached_data = Tensor._array_from_numpy(array, device=device, dtype=dtype)
 
+        # 给cached_data赋值，因为不是op产生的tensor，所以op和inputs都是空的
         self._init(
             None,
             [],
@@ -249,12 +268,14 @@ class Tensor(Value):
             requires_grad=requires_grad,
         )
 
+    # 用后端生成数组
     @staticmethod
     def _array_from_numpy(numpy_array, device, dtype):
         if array_api is numpy:
             return numpy.array(numpy_array, dtype=dtype)
         return array_api.array(numpy_array, device=device, dtype=dtype)
 
+    # 用op和inputs计算出一个新tensor
     @staticmethod
     def make_from_op(op: Op, inputs: List["Value"]):
         tensor = Tensor.__new__(Tensor)
@@ -263,6 +284,7 @@ class Tensor(Value):
             tensor.realize_cached_data()
         return tensor
 
+    # 返回一个无op，无inputs，只有cached_data，且默认不加入梯度计算的value
     @staticmethod
     def make_const(data, requires_grad=False):
         tensor = Tensor.__new__(Tensor)
@@ -276,10 +298,12 @@ class Tensor(Value):
         )
         return tensor
 
+    # 可以通过.data获取没有梯度的数值，梯度下降更新参数时会用到
     @property
     def data(self):
         return self.detach()
 
+    # 更新data的方法，这里要求更新前后dtype一致
     @data.setter
     def data(self, value):
         assert isinstance(value, Tensor)
@@ -289,10 +313,12 @@ class Tensor(Value):
         )
         self.cached_data = value.realize_cached_data()
 
+    # 用make_const返回一个无梯度、在计算图外的tensor
     def detach(self):
         """Create a new tensor that shares the data but detaches from the graph."""
         return Tensor.make_const(self.realize_cached_data())
 
+    # 因为目前只有numpy后端，所以shape就是numpy里的shape
     @property
     def shape(self):
         return self.realize_cached_data().shape
@@ -305,10 +331,12 @@ class Tensor(Value):
     def device(self):
         data = self.realize_cached_data()
         # numpy array always sits on cpu
+        # 如果后端是numpy，则只能用cpu
         if array_api is numpy:
             return cpu()
         return data.device
 
+    # 用backward函数反向传播梯度
     def backward(self, out_grad=None):
         out_grad = out_grad if out_grad else Tensor(numpy.ones(self.shape))
         compute_gradient_of_variables(self, out_grad)
@@ -325,39 +353,46 @@ class Tensor(Value):
             return data
         return data.numpy()
 
+    # + 重载
     def __add__(self, other):
         if isinstance(other, Tensor):
             return needle.ops.EWiseAdd()(self, other)
         else:
             return needle.ops.AddScalar(other)(self)
 
+    # * 重载
     def __mul__(self, other):
         if isinstance(other, Tensor):
             return needle.ops.EWiseMul()(self, other)
         else:
             return needle.ops.MulScalar(other)(self)
 
+    # ** 重载
     def __pow__(self, other):
         if isinstance(other, Tensor):
             raise NotImplementedError()
         else:
             return needle.ops.PowerScalar(other)(self)
 
+    # - 重载
     def __sub__(self, other):
         if isinstance(other, Tensor):
             return needle.ops.EWiseAdd()(self, needle.ops.Negate()(other))
         else:
             return needle.ops.AddScalar(-other)(self)
 
+    # / 重载
     def __truediv__(self, other):
         if isinstance(other, Tensor):
             return needle.ops.EWiseDiv()(self, other)
         else:
             return needle.ops.DivScalar(other)(self)
 
+    # @ 重载
     def __matmul__(self, other):
         return needle.ops.MatMul()(self, other)
 
+    # matmul也可以不用运算符重载
     def matmul(self, other):
         return needle.ops.MatMul()(self, other)
 
@@ -370,6 +405,7 @@ class Tensor(Value):
     def reshape(self, shape):
         return needle.ops.Reshape(shape)(self)
 
+    # 负号重载
     def __neg__(self):
         return needle.ops.Negate()(self)
 

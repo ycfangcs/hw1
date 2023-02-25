@@ -9,6 +9,7 @@ import numpy
 
 # NOTE: we will import numpy as the array_api
 # as the backend for our computations, this line will change in later homeworks
+# 注意，我们这里暂用numpy作为后端，后面这行代码可能会改
 import numpy as array_api
 
 
@@ -163,6 +164,7 @@ def reshape(a, shape):
     return Reshape(shape)(a)
 
 
+# https://github.com/ShusenTang/Dive-into-DL-PyTorch/blob/master/docs/chapter02_prerequisite/2.2_tensor.md#223-%E5%B9%BF%E6%92%AD%E6%9C%BA%E5%88%B6
 class BroadcastTo(TensorOp):
     def __init__(self, shape):
         self.shape = shape
@@ -180,6 +182,7 @@ def broadcast_to(a, shape):
     return BroadcastTo(shape)(a)
 
 
+# 对指定维度求和
 class Summation(TensorOp):
     def __init__(self, axes: Optional[tuple] = None):
         self.axes = axes
@@ -199,6 +202,7 @@ def summation(a, axes=None):
     return Summation(axes)(a)
 
 
+# 矩阵乘
 class MatMul(TensorOp):
     def compute(self, a, b):
         ### BEGIN YOUR SOLUTION
