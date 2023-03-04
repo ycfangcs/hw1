@@ -14,9 +14,11 @@ import numpy as array_api
 
 
 class EWiseAdd(TensorOp):
+    # 前向计算
     def compute(self, a: NDArray, b: NDArray):
         return a + b
 
+    # 反向传播
     def gradient(self, out_grad: Tensor, node: Tensor):
         return out_grad, out_grad
 
@@ -40,13 +42,15 @@ def add_scalar(a, scalar):
     return AddScalar(scalar)(a)
 
 
+# 乘法
 class EWiseMul(TensorOp):
     def compute(self, a: NDArray, b: NDArray):
         return a * b
 
+    #  y = a * b, dy/da = b, dy / db = a 
     def gradient(self, out_grad: Tensor, node: Tensor):
-        lhs, rhs = node.inputs
-        return out_grad * rhs, out_grad * lhs
+        a, b = node.inputs
+        return out_grad * b, out_grad * a
 
 
 def multiply(a, b):

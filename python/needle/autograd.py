@@ -431,21 +431,27 @@ def compute_gradient_of_variables(output_tensor, out_grad):
     node_to_output_grads_list[output_tensor] = [out_grad]
 
     # Traverse graph in reverse topological order given the output_node that we are taking gradient wrt.
+    # 求逆拓扑排序顺序
     reverse_topo_order = list(reversed(find_topo_sort([output_tensor])))
 
     ### BEGIN YOUR SOLUTION
-    for node in reverse_topo_order:    
+    for node in reverse_topo_order: 
+        # 把表里的梯度加和，算出node的梯度
         sum_grad = node_to_output_grads_list[node][0]
         for t in node_to_output_grads_list[node][1:]:
             sum_grad = sum_grad + (t if type(t) == tuple else t)
         node.grad = sum_grad
         
+        # 如果是没有算子的话，跳过
         if node.is_leaf():
             continue
+
+        # 把node梯度向输入结点回传
         for i, grad in enumerate(node.op.gradient_as_tuple(node.grad, node)):
             input_ =  node.inputs[i]
             if input_ not in node_to_output_grads_list:
                 node_to_output_grads_list[input_] = []
+            # 把每一个input_对应的梯度暂存
             node_to_output_grads_list[input_].append(grad)
     ### END YOUR SOLUTION
 
@@ -459,6 +465,7 @@ def find_topo_sort(node_list: List[Value]) -> List[Value]:
     sort.
     """
     ### BEGIN YOUR SOLUTION
+    # 后序dfs找到逆拓扑排序顺序
     visited = set()
     topo_order = []
     for node in node_list:
