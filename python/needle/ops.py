@@ -325,3 +325,17 @@ class ReLU(TensorOp):
 def relu(a):
     return ReLU()(a)
 
+
+
+class Sigmoid(TensorOp):
+    def compute(self, a):
+        a_exp = (-a).exp()
+        return 1 / (1 + a_exp)
+    
+    def gradient(self, out_grad, node):
+        # sigmoid 的导数是 sigmoid * (1 - sigmoid)
+        a = node.inputs[0]
+        return out_grad * sigmoid(a) * (1 - sigmoid(a)) 
+
+def sigmoid(a):
+    return Sigmoid()(a)
